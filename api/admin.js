@@ -29,7 +29,7 @@ export default async function handler(req,res){
  line('Entreprise : '+d.business,660,14,true);line('Identifiant IOE : '+ioe,628,14,true);line('Categorie : '+d.category,596);line('Activite : '+d.activity,564);line('Date de validation : '+approvedAt.slice(0,10),532);line('Statut : ACTIF',500,14,true);
  line('OER est un registre contractuel prive.',260,11);line('Ce certificat ne remplace pas une immatriculation publique.',242,11);
  line('Verifier : www.oer-registry.online',210,11);
- const png=await QRCode.toDataURL(url,{margin:1,width:220});const img=await pdf.embedPng(Uint8Array.from(atob(png.split(',')[1]),c=>c.charCodeAt(0)));page.drawImage(img,{x:55,y:290,width:145,height:145});
+ const png=await QRCode.toDataURL(url,{margin:1,width:220});const img=await pdf.embedPng(Buffer.from(png.split(',')[1],'base64'));page.drawImage(img,{x:55,y:290,width:145,height:145});
  const bytes=await pdf.save();
  await put('public/'+ioe+'.json',JSON.stringify({ioe,ref,business:d.business,category:d.category,activity:d.activity,status:'active',approvedAt}),{access:'private',addRandomSuffix:false,allowOverwrite:false});
  const cert=await put('certificates/'+ioe+'.pdf',Buffer.from(bytes),{access:'private',addRandomSuffix:false,contentType:'application/pdf'});
