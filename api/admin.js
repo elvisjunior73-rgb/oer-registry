@@ -4,9 +4,15 @@ export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
  if(req.headers.authorization!=='Bearer '+process.env.OER_ADMIN_TOKEN||!process.env.OER_ADMIN_TOKEN)return res.status(401).json({error:'Accès réservé au greffe'});
  if(req.method==='GET'){
- const {blobs}=await list({prefix:'applications/',limit:100});
- const entries=await Promise.all(blobs.map(async b=>{try{const r=await get(b.url,{access:'private'});const d=await new Response(r.stream).json();return {ref:d.ref,business:d.business,name:d.name,category:d.category,email:d.email,createdAt:d.createdAt}}catch{return null}}));
- return res.status(200).json({applications:entries.filter(Boolean)});
+ try{
+ const all=async prefix=>{let cursor,blobs=[];do{const p=await list({prefix,limit:100,cursor});blobs.push(...p.blobs);cursor=p.hasMore?p.cursor:undefined}while(cursor&&blobs.length<1000);return blobs};
+ const [apps,decs]=await Promise.all([all('applications/'),all('decisions/')]);
+ const read=async b=>{try{const r=await get(b.url,{access:'private'});return r?await new Response(r.stream).json():null}catch{return null}};
+ const [entries,decisions]=await Promise.all([Promise.all(apps.map(read)),Promise.all(decs.map(read))]);
+ const byRef=new Map(decisions.filter(Boolean).map(d=>[d.ref,d]));
+ const applications=entries.filter(Boolean).map(d=>{const v=byRef.get(d.ref);return {ref:d.ref,business:d.business,name:d.name,category:d.category,email:d.email,activity:d.activity,sector:d.sector,nationalId:d.nationalId,createdAt:d.createdAt,status:v?.status||'pending',ioe:v?.ioe||null,approvedAt:v?.approvedAt||null,decidedAt:v?.decidedAt||null}}).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+ return res.status(200).json({applications,stats:{total:applications.length,pending:applications.filter(x=>x.status==='pending').length,approved:applications.filter(x=>x.status==='approved').length,rejected:applications.filter(x=>x.status==='rejected').length},truncated:apps.length>=1000});
+ }catch(e){return res.status(503).json({error:'Lecture du registre indisponible.'})}
  }
  if(req.method!=='POST')return res.status(405).json({error:'Méthode non autorisée'});
  const ref=String(req.body?.reference||'').trim().toUpperCase(),decision=req.body?.decision;
