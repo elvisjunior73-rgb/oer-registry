@@ -21,9 +21,10 @@ if(p.requiresApproval){
 const orderId=randomUUID(),origin='https://www.oer-registry.online';
 const order={id:orderId,productId:p.id,productName:p.name,amount:p.price,currency:'EUR',email,name,reference:p.requiresApproval?reference:null,status:'created',createdAt:new Date().toISOString()};
 try{
+ await put('orders/'+orderId+'.json',JSON.stringify(order),{access:'private',addRandomSuffix:false,contentType:'application/json'});
  const response=await fetch('https://api.mollie.com/v2/payments',{method:'POST',headers:{Authorization:'Bearer '+process.env.MOLLIE_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({amount:{currency:'EUR',value:p.price.toFixed(2)},description:'OER — '+p.name,redirectUrl:origin+'/paiement.html?order='+encodeURIComponent(orderId),webhookUrl:origin+'/api/mollie-webhook',metadata:{orderId,productId:p.id}})});
  const payment=await response.json();if(!response.ok||!payment.id||!payment._links?.checkout?.href)return res.status(502).json({error:'Création du paiement indisponible'});
- order.paymentId=payment.id;order.status='open';await put('orders/'+orderId+'.json',JSON.stringify(order),{access:'private',addRandomSuffix:false,contentType:'application/json'});
+ order.paymentId=payment.id;order.status='open';await put('orders/'+orderId+'.json',JSON.stringify(order),{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json'});
  return res.status(200).json({orderId,checkoutUrl:payment._links.checkout.href});
 }catch{return res.status(503).json({error:'Impossible de démarrer le paiement. Veuillez réessayer.'})}
 }
