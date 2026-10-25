@@ -10,10 +10,10 @@ export default async function handler(req,res){
  if(req.method==='POST'&&action==='request'){
  if(!/^OER-REQ-[A-F0-9]{12}$/.test(ref)||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return res.status(400).json({error:'Référence et e-mail requis'});
  try{const application=await read('applications/'+ref+'.json');if(application?.email?.toLowerCase()===email){
- const exp=Date.now()+15*60*1000,nonce=randomBytes(12).toString('hex'),payload=Buffer.from(JSON.stringify({ref,email,exp,nonce})).toString('base64url'),token=payload+'.'+sign(payload);
+ const exp=Date.now()+48*60*60*1000,nonce=randomBytes(12).toString('hex'),payload=Buffer.from(JSON.stringify({ref,email,exp,nonce})).toString('base64url'),token=payload+'.'+sign(payload);
  const url='https://www.oer-registry.online/candidat.html?token='+encodeURIComponent(token);
  const key=process.env.OPENSEND_API_KEY||process.env.RESEND_API_KEY;
- if(key){const r=await fetch((process.env.OPENSEND_API_URL||'https://api.resend.com')+'/emails',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.OER_EMAIL_FROM,to:[email],subject:'OER — Connexion sécurisée à votre espace candidat',html:'<p>Pour accéder à votre dossier OER, utilisez ce lien valable 15 minutes :</p><p><a href="'+url+'">Accéder à mon espace candidat</a></p><p>Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.</p>'})});if(!r.ok)throw Error('Service email indisponible')}
+ if(key){const r=await fetch((process.env.OPENSEND_API_URL||'https://api.resend.com')+'/emails',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.OER_EMAIL_FROM,to:[email],subject:'OER — Connexion sécurisée à votre espace candidat',html:'<p>Pour accéder à votre dossier OER, utilisez ce lien valable 48 heures :</p><p><a href="'+url+'">Accéder à mon espace candidat</a></p><p>Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.</p>'})});if(!r.ok)throw Error('Service email indisponible')}
  }
  return res.status(200).json({ok:true,message:'Si les informations correspondent à un dossier, un lien de connexion a été envoyé.'})}catch{return res.status(503).json({error:'Service momentanément indisponible'})}
  }
