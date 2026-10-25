@@ -4,14 +4,14 @@ const clean=(v,max=300)=>String(v??'').trim().slice(0,max);
 const htmlEscape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export default async function handler(req,res){
  if(req.method!=='POST')return res.status(405).json({error:'Méthode non autorisée'});
- const d=req.body||{};const email=clean(d.email,254),name=clean(d.name),business=clean(d.business),activity=clean(d.activity),category=clean(d.category,3),sector=clean(d.sector),details=clean(d.details),nationalId=clean(d.nationalId),code=clean(d.code);
+ const d=req.body||{};const email=clean(d.email,254),name=clean(d.name),business=clean(d.business),activity=clean(d.activity),category=clean(d.category,3),sector=clean(d.sector),details=clean(d.details),nationalId=clean(d.nationalId),code=clean(d.code),maritimeZone=clean(d.maritimeZone,60);
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!name||!business||!activity||!['EOI','EOS'].includes(category)||!d.accepted)return res.status(400).json({error:'Dossier incomplet ou conditions non acceptées.'});
  if(d.website) return res.status(400).json({error:'Demande refusée.'});
  if(!(process.env.OPENSEND_API_KEY||process.env.RESEND_API_KEY)||!process.env.OER_EMAIL_FROM)return res.status(503).json({error:"Le service d'envoi n'est pas encore configuré. Contactez contact@nelvis-france.com."});
  const ref='OER-REQ-'+crypto.randomUUID().slice(0,12).toUpperCase();
  if(!process.env.BLOB_READ_WRITE_TOKEN)return res.status(503).json({error:'Le registre persistant est indisponible. Veuillez réessayer.'});
- try{await put('applications/'+ref+'.json',JSON.stringify({ref,status:'pending',createdAt:new Date().toISOString(),email,name,business,activity,category,sector,details,nationalId,code}),{access:'private',addRandomSuffix:false,contentType:'application/json'});}catch{return res.status(503).json({error:'Enregistrement du dossier indisponible. Veuillez réessayer.'})}
- const fields={Référence:ref,Catégorie:category,'Nom commercial':business,'Titulaire / représentant':name,'Email':email,Secteur:sector,Activité:activity,'Activités complémentaires':details,'Code OER déclaré':code,'Immatriculation territoriale':nationalId};
+ try{await put('applications/'+ref+'.json',JSON.stringify({ref,status:'pending',createdAt:new Date().toISOString(),email,name,business,activity,category,sector,details,nationalId,code,maritimeZone}),{access:'private',addRandomSuffix:false,contentType:'application/json'});}catch{return res.status(503).json({error:'Enregistrement du dossier indisponible. Veuillez réessayer.'})}
+ const fields={Référence:ref,Catégorie:category,'Nom commercial':business,'Titulaire / représentant':name,'Email':email,Secteur:sector,Activité:activity,'Activités complémentaires':details,'Code OER déclaré':code,'Zone maritime souhaitée':maritimeZone,'Immatriculation territoriale':nationalId};
  const detail=Object.entries(fields).map(([k,v])=>'<p><b>'+htmlEscape(k)+'</b> : '+htmlEscape(v)+'</p>').join('');
  const sender=process.env.OER_EMAIL_FROM;
  const send=async payload=>{const r=await fetch((process.env.OPENSEND_API_URL||'https://api.resend.com')+'/emails',{method:'POST',headers:{Authorization:'Bearer '+(process.env.OPENSEND_API_KEY||process.env.RESEND_API_KEY),'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!r.ok)throw Error('Service email '+r.status);return r.json()};
