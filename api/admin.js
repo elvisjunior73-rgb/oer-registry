@@ -1,6 +1,4 @@
 import {list,get,put} from '@vercel/blob';
-import {PDFDocument,StandardFonts,rgb} from 'pdf-lib';
-import QRCode from 'qrcode';
 const load=async pathname=>{const {blobs}=await list({prefix:pathname,limit:1});const b=blobs.find(x=>x.pathname===pathname);if(!b)return null;const r=await get(b.url,{access:'private'});return r?await new Response(r.stream).json():null};
 export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
@@ -18,6 +16,7 @@ export default async function handler(req,res){
  const existing=await load('decisions/'+ref+'.json');if(existing)return res.status(409).json({error:'Dossier déjà traité',decision:existing});
  if(decision==='reject'){await put('decisions/'+ref+'.json',JSON.stringify({ref,status:'rejected',decidedAt:new Date().toISOString()}),{access:'private',addRandomSuffix:false,allowOverwrite:false});return res.status(200).json({ok:true,status:'rejected'})}
  const ioe='IOE-'+d.category+'-'+crypto.randomUUID().replace(/-/g,'').slice(0,12).toUpperCase(),approvedAt=new Date().toISOString(),url='https://www.oer-registry.online/#verify?ioe='+ioe;
+ const [{PDFDocument,StandardFonts,rgb},{default:QRCode}]=await Promise.all([import('pdf-lib'),import('qrcode')]);
  const pdf=await PDFDocument.create(),page=pdf.addPage([595,842]),font=await pdf.embedFont(StandardFonts.Helvetica),bold=await pdf.embedFont(StandardFonts.HelveticaBold);
  const line=(str,y,size=13,heavy=false)=>page.drawText(String(str).replace(/[^\x20-\x7EÀ-ÿ]/g,' '),{x:55,y,size,font:heavy?bold:font,color:rgb(.04,.14,.23),maxWidth:485});
  line('OER — OCEAN ENTERPRISE REGISTRY',760,21,true);line('CERTIFICAT D INSCRIPTION CONVENTIONNELLE',715,17,true);
