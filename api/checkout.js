@@ -5,7 +5,7 @@ const read=async path=>{const r=await list({prefix:path,limit:1});const b=r.blob
 const clean=(s,n=200)=>String(s??'').trim().slice(0,n);
 export default async function handler(req,res){
 res.setHeader('Cache-Control','no-store');if(req.method!=='POST')return res.status(405).json({error:'Méthode non autorisée'});
-if(!process.env.MOLLIE_API_KEY||!process.env.BLOB_READ_WRITE_TOKEN)return res.status(503).json({error:'Paiement Mollie indisponible : configuration marchande nécessaire'});
+if(!(process.env.MOLLIE_API_KEY||process.env.MOLLIE)||!process.env.BLOB_READ_WRITE_TOKEN)return res.status(503).json({error:'Paiement Mollie indisponible : configuration marchande nécessaire'});
 const p=findProduct(clean(req.body?.productId,60));if(!p)return res.status(400).json({error:'Produit inconnu'});
 const email=clean(req.body?.email,254).toLowerCase(),name=clean(req.body?.name,150),reference=clean(req.body?.reference,60).toUpperCase();
 if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||!name)return res.status(400).json({error:'Nom et e-mail requis'});
@@ -22,7 +22,7 @@ const orderId=randomUUID(),origin='https://www.oer-registry.online';
 const order={id:orderId,productId:p.id,productName:p.name,amount:p.price,currency:'EUR',email,name,reference:p.requiresApproval?reference:null,status:'created',createdAt:new Date().toISOString()};
 try{
  await put('orders/'+orderId+'.json',JSON.stringify(order),{access:'private',addRandomSuffix:false,contentType:'application/json'});
- const response=await fetch('https://api.mollie.com/v2/payments',{method:'POST',headers:{Authorization:'Bearer '+process.env.MOLLIE_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({amount:{currency:'EUR',value:p.price.toFixed(2)},description:'OER — '+p.name,redirectUrl:origin+'/paiement.html?order='+encodeURIComponent(orderId),webhookUrl:origin+'/api/mollie-webhook',metadata:{orderId,productId:p.id}})});
+ const response=await fetch('https://api.mollie.com/v2/payments',{method:'POST',headers:{Authorization:'Bearer '+(process.env.MOLLIE_API_KEY||process.env.MOLLIE),'Content-Type':'application/json'},body:JSON.stringify({amount:{currency:'EUR',value:p.price.toFixed(2)},description:'OER — '+p.name,redirectUrl:origin+'/paiement.html?order='+encodeURIComponent(orderId),webhookUrl:origin+'/api/mollie-webhook',metadata:{orderId,productId:p.id}})});
  const payment=await response.json();if(!response.ok||!payment.id||!payment._links?.checkout?.href)return res.status(502).json({error:'Création du paiement indisponible'});
  order.paymentId=payment.id;order.status='open';await put('orders/'+orderId+'.json',JSON.stringify(order),{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json'});
  return res.status(200).json({orderId,checkoutUrl:payment._links.checkout.href});
