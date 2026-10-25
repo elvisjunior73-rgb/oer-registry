@@ -1,3 +1,4 @@
+import {put} from '@vercel/blob';
 const headers={'Content-Type':'application/json','Cache-Control':'no-store'};
 const clean=(v,max=300)=>String(v??'').trim().slice(0,max);
 const htmlEscape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -8,6 +9,8 @@ export default async function handler(req,res){
  if(d.website) return res.status(400).json({error:'Demande refusée.'});
  if(!(process.env.OPENSEND_API_KEY||process.env.RESEND_API_KEY)||!process.env.OER_EMAIL_FROM)return res.status(503).json({error:"Le service d'envoi n'est pas encore configuré. Contactez contact@nelvis-france.com."});
  const ref='OER-REQ-'+crypto.randomUUID().slice(0,12).toUpperCase();
+ if(!process.env.BLOB_READ_WRITE_TOKEN)return res.status(503).json({error:'Le registre persistant est indisponible. Veuillez réessayer.'});
+ try{await put('applications/'+ref+'.json',JSON.stringify({ref,status:'pending',createdAt:new Date().toISOString(),email,name,business,activity,category,sector,details,nationalId,code}),{access:'private',addRandomSuffix:false,contentType:'application/json'});}catch{return res.status(503).json({error:'Enregistrement du dossier indisponible. Veuillez réessayer.'})}
  const fields={Référence:ref,Catégorie:category,'Nom commercial':business,'Titulaire / représentant':name,'Email':email,Secteur:sector,Activité:activity,'Activités complémentaires':details,'Code OER déclaré':code,'Immatriculation territoriale':nationalId};
  const detail=Object.entries(fields).map(([k,v])=>'<p><b>'+htmlEscape(k)+'</b> : '+htmlEscape(v)+'</p>').join('');
  const sender=process.env.OER_EMAIL_FROM;
