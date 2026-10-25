@@ -1,3 +1,4 @@
+import {notifyCandidate} from './oer-language.js';
 import {list,get,put} from '@vercel/blob';
 const load=async pathname=>{const {blobs}=await list({prefix:pathname,limit:1});const b=blobs.find(x=>x.pathname===pathname);if(!b)return null;const r=await get(b.url,{access:'private'});return r?await new Response(r.stream).json():null};
 export default async function handler(req,res){
@@ -20,7 +21,7 @@ export default async function handler(req,res){
  try{
  const d=await load('applications/'+ref+'.json');if(!d)return res.status(404).json({error:'Dossier introuvable'});
  const existing=await load('decisions/'+ref+'.json');if(existing)return res.status(409).json({error:'Dossier déjà traité',decision:existing});
- if(decision==='reject'){await put('decisions/'+ref+'.json',JSON.stringify({ref,status:'rejected',decidedAt:new Date().toISOString()}),{access:'private',addRandomSuffix:false,allowOverwrite:false});return res.status(200).json({ok:true,status:'rejected'})}
+ if(decision==='reject'){await put('decisions/'+ref+'.json',JSON.stringify({ref,status:'rejected',decidedAt:new Date().toISOString()}),{access:'private',addRandomSuffix:false,allowOverwrite:false});let notified=false;try{notified=await notifyCandidate(d,'rejected')}catch{}return res.status(200).json({ok:true,status:'rejected',notified})}
  const ioe='IOE-'+d.category+'-'+crypto.randomUUID().replace(/-/g,'').slice(0,12).toUpperCase(),approvedAt=new Date().toISOString(),url='https://www.oer-registry.online/#verify?ioe='+ioe;
  const [{PDFDocument,StandardFonts,rgb},{default:QRCode}]=await Promise.all([import('pdf-lib'),import('qrcode')]);
  const pdf=await PDFDocument.create(),page=pdf.addPage([595,842]),font=await pdf.embedFont(StandardFonts.Helvetica),bold=await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -34,8 +35,7 @@ export default async function handler(req,res){
  await put('public/'+ioe+'.json',JSON.stringify({ioe,ref,business:d.business,category:d.category,activity:d.activity,status:'active',approvedAt}),{access:'private',addRandomSuffix:false,allowOverwrite:false});
  const cert=await put('certificates/'+ioe+'.pdf',Buffer.from(bytes),{access:'private',addRandomSuffix:false,contentType:'application/pdf'});
  await put('decisions/'+ref+'.json',JSON.stringify({ref,ioe,status:'approved',approvedAt,certificate:cert.url}),{access:'private',addRandomSuffix:false,allowOverwrite:false});
- const key=process.env.OPENSEND_API_KEY||process.env.RESEND_API_KEY;
- let notified=false;if(key){try{const r=await fetch((process.env.OPENSEND_API_URL||'https://api.resend.com')+'/emails',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.OER_EMAIL_FROM,to:[d.email],subject:'OER — Inscription validée '+ioe,html:'<p>Votre inscription OER a été validée.</p><p>Identifiant : <strong>'+ioe+'</strong></p><p>Vérification : <a href="'+url+'">'+url+'</a></p><p>Le certificat PDF est joint. Ce document est une attestation conventionnelle privée.</p>',attachments:[{filename:'Certificat-'+ioe+'.pdf',content:Buffer.from(bytes).toString('base64')}]})});notified=r.ok}catch{}}
+ let notified=false;try{notified=await notifyCandidate(d,'approved',{ioe,attachments:[{filename:'Certificat-'+ioe+'.pdf',content:Buffer.from(bytes).toString('base64')}]})}catch{}
  return res.status(200).json({ok:true,ioe,notified});
  }catch(e){return res.status(500).json({error:'Opération interrompue : '+e.message})}
 }
